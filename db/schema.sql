@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_definitions_category ON task_definitions(category
 -- Insert default admin user (password: admin123)
 -- Note: In production, change this immediately after deployment
 INSERT OR IGNORE INTO users (username, password_hash, role)
-VALUES ('admin', '$argon2id$v=19$m=19456,t=2,p=1$YWRtaW4xMjNzYWx0$fHvZqJZ8kQ2Xv8Wd5L8mJQ', 'admin');
+VALUES ('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'admin');
 
 -- Insert default categories
 INSERT OR IGNORE INTO categories (name, color, sort_order) VALUES

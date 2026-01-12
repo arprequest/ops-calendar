@@ -9,30 +9,19 @@ interface User {
   role: 'admin' | 'user'
 }
 
-// Simple hash comparison (in production, use proper Argon2 verification)
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  // For development, accept simple comparison
-  // In production, implement proper Argon2 verification
-  if (hash.startsWith('$argon2')) {
-    // For now, check if it's the default admin password
-    return password === 'admin123' && hash.includes('admin123')
-  }
-
-  // Simple hash for development
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-  return hashHex === hash
-}
-
+// Hash password using SHA-256
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(password)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
   const hashArray = Array.from(new Uint8Array(hashBuffer))
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Verify password against stored hash
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const passwordHash = await hashPassword(password)
+  return passwordHash === storedHash
 }
 
 function generateSessionId(): string {
