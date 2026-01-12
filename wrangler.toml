@@ -1,0 +1,8 @@
+name = "ops-calendar"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-calendar-db"
+database_id = "4a1fd3c8-2f49-4f8e-819d-24c7f70742db"
