@@ -13,6 +13,13 @@ interface RecurrenceConfig {
   [key: string]: unknown
 }
 
+// Month name to number mapping (both full and abbreviated)
+const MONTH_MAP: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+}
+
 // Parse the "When" field into recurrence configuration
 function parseRecurrence(when: string): { type: string; config: RecurrenceConfig } {
   const w = when.toLowerCase().trim()
@@ -84,86 +91,127 @@ function parseRecurrence(when: string): { type: string; config: RecurrenceConfig
     }
   }
 
-  // Month range (e.g., "Jan-Mar", "May-Jul")
-  const monthRangeMatch = w.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[-\/](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i)
-  if (monthRangeMatch) {
-    const monthMap: Record<string, number> = {
-      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+  // Two specific dates with days (e.g., "Apr 30/Oct 31")
+  const twoDateMatch = w.match(/([a-z]+)\s+(\d{1,2})\s*\/\s*([a-z]+)\s+(\d{1,2})/i)
+  if (twoDateMatch) {
+    const month1 = MONTH_MAP[twoDateMatch[1].toLowerCase()]
+    const day1 = parseInt(twoDateMatch[2])
+    const month2 = MONTH_MAP[twoDateMatch[3].toLowerCase()]
+    const day2 = parseInt(twoDateMatch[4])
+    if (month1 && month2) {
+      return {
+        type: 'multiDate',
+        config: {
+          type: 'multiDate',
+          dates: [
+            { month: month1, day: day1 },
+            { month: month2, day: day2 },
+          ],
+        },
+      }
     }
-    const startMonth = monthMap[monthRangeMatch[1].toLowerCase()]
-    const endMonth = monthMap[monthRangeMatch[2].toLowerCase()]
-    const months: number[] = []
-    for (let m = startMonth; m <= endMonth; m++) {
-      months.push(m)
-    }
-    return { type: 'multiMonth', config: { type: 'multiMonth', months, dayOfMonth: 1 } }
   }
 
-  // Multiple months separated by / (e.g., "Mar/Sep", "Oct/Nov")
-  const multiMonthSlashMatch = w.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i)
-  if (multiMonthSlashMatch) {
-    const monthMap: Record<string, number> = {
-      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-    }
+  // Month range with full names (e.g., "January/July")
+  const fullMonthSlashMatch = w.match(/^(january|february|march|april|may|june|july|august|september|october|november|december)\/(january|february|march|april|may|june|july|august|september|october|november|december)$/i)
+  if (fullMonthSlashMatch) {
     return {
       type: 'multiMonth',
       config: {
         type: 'multiMonth',
         months: [
-          monthMap[multiMonthSlashMatch[1].toLowerCase()],
-          monthMap[multiMonthSlashMatch[2].toLowerCase()],
+          MONTH_MAP[fullMonthSlashMatch[1].toLowerCase()],
+          MONTH_MAP[fullMonthSlashMatch[2].toLowerCase()],
         ],
         dayOfMonth: 1,
       },
     }
   }
 
-  // Specific date with year (e.g., "May 2025", "October 2029")
-  const oneTimeYearMatch = w.match(/(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{4})/i)
-  if (oneTimeYearMatch) {
-    const monthMap: Record<string, number> = {
-      january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
-      july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-      jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+  // Month range (e.g., "Jan-Mar", "Jun-Dec")
+  const monthRangeMatch = w.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)-(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$/i)
+  if (monthRangeMatch) {
+    const startMonth = MONTH_MAP[monthRangeMatch[1].toLowerCase()]
+    const endMonth = MONTH_MAP[monthRangeMatch[2].toLowerCase()]
+    const months: number[] = []
+    if (startMonth <= endMonth) {
+      for (let m = startMonth; m <= endMonth; m++) {
+        months.push(m)
+      }
+    } else {
+      // Handle wrap-around (e.g., Oct-Mar)
+      for (let m = startMonth; m <= 12; m++) months.push(m)
+      for (let m = 1; m <= endMonth; m++) months.push(m)
     }
-    const month = monthMap[oneTimeYearMatch[1].toLowerCase()]
-    const year = parseInt(oneTimeYearMatch[2])
+    return { type: 'multiMonth', config: { type: 'multiMonth', months, dayOfMonth: 1 } }
+  }
+
+  // Multiple months separated by / (e.g., "Mar/Sep", "Oct/Nov")
+  const multiMonthSlashMatch = w.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$/i)
+  if (multiMonthSlashMatch) {
     return {
-      type: 'oneTime',
-      config: { type: 'oneTime', date: `${year}-${String(month).padStart(2, '0')}-01` },
+      type: 'multiMonth',
+      config: {
+        type: 'multiMonth',
+        months: [
+          MONTH_MAP[multiMonthSlashMatch[1].toLowerCase()],
+          MONTH_MAP[multiMonthSlashMatch[2].toLowerCase()],
+        ],
+        dayOfMonth: 1,
+      },
+    }
+  }
+
+  // Specific date with day, comma, and year (e.g., "December 3, 2026")
+  const fullDateWithCommaMatch = w.match(/([a-z]+)\s+(\d{1,2}),?\s+(\d{4})/i)
+  if (fullDateWithCommaMatch) {
+    const month = MONTH_MAP[fullDateWithCommaMatch[1].toLowerCase()]
+    if (month) {
+      return {
+        type: 'oneTime',
+        config: {
+          type: 'oneTime',
+          date: `${fullDateWithCommaMatch[3]}-${String(month).padStart(2, '0')}-${String(parseInt(fullDateWithCommaMatch[2])).padStart(2, '0')}`,
+        },
+      }
+    }
+  }
+
+  // Specific date with year (e.g., "May 2025", "October 2029")
+  const oneTimeYearMatch = w.match(/^([a-z]+)\s+(\d{4})$/i)
+  if (oneTimeYearMatch) {
+    const month = MONTH_MAP[oneTimeYearMatch[1].toLowerCase()]
+    if (month) {
+      const year = parseInt(oneTimeYearMatch[2])
+      return {
+        type: 'oneTime',
+        config: { type: 'oneTime', date: `${year}-${String(month).padStart(2, '0')}-01` },
+      }
     }
   }
 
   // Specific date (e.g., "January 11", "October 27", "December 1")
-  const specificDateMatch = w.match(/(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})/i)
+  const specificDateMatch = w.match(/^([a-z]+)\s+(\d{1,2})$/i)
   if (specificDateMatch) {
-    const monthMap: Record<string, number> = {
-      january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
-      july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-      jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-    }
-    return {
-      type: 'yearly',
-      config: {
+    const month = MONTH_MAP[specificDateMatch[1].toLowerCase()]
+    if (month) {
+      return {
         type: 'yearly',
-        month: monthMap[specificDateMatch[1].toLowerCase()],
-        dayOfMonth: parseInt(specificDateMatch[2]),
-      },
+        config: {
+          type: 'yearly',
+          month: month,
+          dayOfMonth: parseInt(specificDateMatch[2]),
+        },
+      }
     }
   }
 
   // Month name only (e.g., "January", "May")
   const monthOnlyMatch = w.match(/^(january|february|march|april|may|june|july|august|september|october|november|december)$/i)
   if (monthOnlyMatch) {
-    const monthMap: Record<string, number> = {
-      january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
-      july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-    }
     return {
       type: 'yearly',
-      config: { type: 'yearly', month: monthMap[monthOnlyMatch[1].toLowerCase()], dayOfMonth: 1 },
+      config: { type: 'yearly', month: MONTH_MAP[monthOnlyMatch[1].toLowerCase()], dayOfMonth: 1 },
     }
   }
 
@@ -182,6 +230,7 @@ function parseRecurrence(when: string): { type: string; config: RecurrenceConfig
   }
 
   // Default to yearly if we can't parse
+  console.log('Unrecognized recurrence pattern:', when)
   return { type: 'yearly', config: { type: 'yearly', month: 1, dayOfMonth: 1 } }
 }
 
@@ -329,6 +378,21 @@ function generateInstances(
       break
     }
 
+    case 'multiDate': {
+      // Multiple specific dates per year (e.g., "Apr 30/Oct 31")
+      const dates = config.dates as Array<{ month: number; day: number }>
+      for (let year = startYear; year <= endYear; year++) {
+        for (const { month, day } of dates) {
+          const actualDay = Math.min(day, new Date(year, month, 0).getDate())
+          instances.push({
+            task_definition_id: taskId,
+            scheduled_date: `${year}-${String(month).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`,
+          })
+        }
+      }
+      break
+    }
+
     case 'multiYear': {
       const baseYear = config.baseYear as number
       const interval = config.interval as number
@@ -389,45 +453,57 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     let tasksCreated = 0
     let instancesCreated = 0
 
-    for (const task of tasks) {
-      // Get or create category
-      let categoryId = categoryMap.get(task.category.toLowerCase())
-      if (!categoryId) {
+    // First, create any missing categories
+    const uniqueCategories = [...new Set(tasks.map((t) => t.category.toLowerCase()))]
+    for (const cat of uniqueCategories) {
+      if (!categoryMap.has(cat)) {
+        const originalCat = tasks.find((t) => t.category.toLowerCase() === cat)?.category || cat
         const result = await env.DB.prepare(
           'INSERT INTO categories (name) VALUES (?) RETURNING id'
         )
-          .bind(task.category)
+          .bind(originalCat)
           .first<{ id: number }>()
-        categoryId = result!.id
-        categoryMap.set(task.category.toLowerCase(), categoryId)
+        categoryMap.set(cat, result!.id)
+      }
+    }
+
+    // Process tasks in smaller batches to avoid rate limits
+    const BATCH_SIZE = 10
+    for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+      const taskBatch = tasks.slice(i, i + BATCH_SIZE)
+      const allInstances: Array<{ task_definition_id: number; scheduled_date: string }> = []
+
+      // Create task definitions for this batch
+      for (const task of taskBatch) {
+        const categoryId = categoryMap.get(task.category.toLowerCase())!
+        const { type, config } = parseRecurrence(task.when)
+
+        const taskResult = await env.DB.prepare(`
+          INSERT INTO task_definitions (category_id, title, recurrence_type, recurrence_config)
+          VALUES (?, ?, ?, ?)
+          RETURNING id
+        `)
+          .bind(categoryId, task.title, type, JSON.stringify(config))
+          .first<{ id: number }>()
+
+        tasksCreated++
+
+        // Generate instances
+        const instances = generateInstances(taskResult!.id, config, yearStart, yearEnd)
+        allInstances.push(...instances)
       }
 
-      // Parse recurrence
-      const { type, config } = parseRecurrence(task.when)
-
-      // Create task definition
-      const taskResult = await env.DB.prepare(`
-        INSERT INTO task_definitions (category_id, title, recurrence_type, recurrence_config)
-        VALUES (?, ?, ?, ?)
-        RETURNING id
-      `)
-        .bind(categoryId, task.title, type, JSON.stringify(config))
-        .first<{ id: number }>()
-
-      tasksCreated++
-
-      // Generate instances
-      const instances = generateInstances(taskResult!.id, config, yearStart, yearEnd)
-
-      // Batch insert instances
-      for (const instance of instances) {
-        await env.DB.prepare(`
-          INSERT OR IGNORE INTO task_instances (task_definition_id, scheduled_date)
-          VALUES (?, ?)
-        `)
-          .bind(instance.task_definition_id, instance.scheduled_date)
-          .run()
-        instancesCreated++
+      // Batch insert instances using D1 batch API (chunks of 100)
+      const INSTANCE_BATCH_SIZE = 100
+      for (let j = 0; j < allInstances.length; j += INSTANCE_BATCH_SIZE) {
+        const instanceBatch = allInstances.slice(j, j + INSTANCE_BATCH_SIZE)
+        const statements = instanceBatch.map((instance) =>
+          env.DB.prepare(
+            'INSERT OR IGNORE INTO task_instances (task_definition_id, scheduled_date) VALUES (?, ?)'
+          ).bind(instance.task_definition_id, instance.scheduled_date)
+        )
+        await env.DB.batch(statements)
+        instancesCreated += instanceBatch.length
       }
     }
 
@@ -443,8 +519,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     )
   } catch (error) {
     console.error('Error importing tasks:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return new Response(
-      JSON.stringify({ success: false, error: 'Failed to import tasks' }),
+      JSON.stringify({ success: false, error: 'Failed to import tasks', details: errorMessage }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
