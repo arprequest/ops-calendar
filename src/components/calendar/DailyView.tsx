@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, isBefore, startOfDay } from 'date-fns'
 import { clsx } from 'clsx'
 import { useCalendarStore } from '../../stores/calendarStore'
+import { useTaskPanelStore } from '../../stores/taskPanelStore'
 import type { TaskInstance, Category } from '../../types'
 import { useState } from 'react'
 
@@ -91,25 +92,13 @@ export default function DailyView() {
     <div className="space-y-6">
       {/* Overdue section */}
       {filteredOverdue.length > 0 && (
-        <div className="card p-4 border-red-200 bg-red-50">
-          <h2 className="text-sm font-semibold text-red-700 mb-3 flex items-center gap-2">
-            <WarningIcon className="w-4 h-4" />
-            OVERDUE ({filteredOverdue.length})
-          </h2>
-          <div className="space-y-2">
-            {filteredOverdue.map((instance) => (
-              <TaskItem
-                key={instance.id}
-                instance={instance}
-                categories={categories}
-                onStatusChange={(status, notes) =>
-                  updateStatusMutation.mutate({ id: instance.id, status, notes })
-                }
-                isOverdue
-              />
-            ))}
-          </div>
-        </div>
+        <OverdueSection
+          instances={filteredOverdue}
+          categories={categories}
+          onStatusChange={(id, status, notes) =>
+            updateStatusMutation.mutate({ id, status, notes })
+          }
+        />
       )}
 
       {/* Today's tasks by category */}
@@ -147,6 +136,149 @@ export default function DailyView() {
               style={{ width: `${progress}%` }}
             />
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OverdueSection({
+  instances,
+  categories,
+  onStatusChange,
+}: {
+  instances: TaskInstance[]
+  categories: Category[]
+  onStatusChange: (id: number, status: string, notes?: string) => void
+}) {
+  const [isExpanded, setIsExpanded] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+
+  // Group overdue by category
+  const groupedByCategory = categories.map((category) => ({
+    category,
+    tasks: instances.filter((t) => t.task_definition?.category_id === category.id),
+  })).filter((g) => g.tasks.length > 0)
+
+  const handleSelectAll = (_categoryId: number, tasks: TaskInstance[]) => {
+    const taskIds = tasks.map((t) => t.id)
+    const allSelected = taskIds.every((id) => selectedIds.has(id))
+
+    if (allSelected) {
+      // Deselect all
+      const newSelected = new Set(selectedIds)
+      taskIds.forEach((id) => newSelected.delete(id))
+      setSelectedIds(newSelected)
+    } else {
+      // Select all
+      const newSelected = new Set(selectedIds)
+      taskIds.forEach((id) => newSelected.add(id))
+      setSelectedIds(newSelected)
+    }
+  }
+
+  const handleBulkStatusChange = (status: string) => {
+    selectedIds.forEach((id) => {
+      onStatusChange(id, status)
+    })
+    setSelectedIds(new Set())
+  }
+
+  const toggleSelection = (id: number) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  return (
+    <div className="card border-red-200 bg-red-50">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-4 hover:bg-red-100"
+      >
+        <div className="flex items-center gap-2">
+          <WarningIcon className="w-4 h-4 text-red-700" />
+          <span className="text-sm font-semibold text-red-700">OVERDUE ({instances.length})</span>
+        </div>
+        <ChevronIcon className={clsx('w-5 h-5 text-red-400 transition-transform', isExpanded && 'rotate-180')} />
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-red-200">
+          {/* Bulk actions */}
+          {selectedIds.size > 0 && (
+            <div className="px-4 py-2 bg-red-100 border-b border-red-200 flex items-center gap-3">
+              <span className="text-sm text-red-700">{selectedIds.size} selected</span>
+              <button
+                onClick={() => handleBulkStatusChange('completed')}
+                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Mark Completed
+              </button>
+              <button
+                onClick={() => handleBulkStatusChange('skipped')}
+                className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Mark Skipped
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="px-2 py-1 text-xs text-red-700 hover:text-red-900"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {/* Group by category */}
+          {groupedByCategory.map(({ category, tasks }) => {
+            const allSelected = tasks.every((t) => selectedIds.has(t.id))
+            const someSelected = tasks.some((t) => selectedIds.has(t.id))
+
+            return (
+              <div key={category.id} className="border-b border-red-200 last:border-b-0">
+                <div className="px-4 py-2 bg-red-100/50 flex items-center gap-2">
+                  <button
+                    onClick={() => handleSelectAll(category.id, tasks)}
+                    className={clsx(
+                      'w-4 h-4 rounded border-2 flex items-center justify-center transition-colors',
+                      allSelected
+                        ? 'bg-red-600 border-red-600 text-white'
+                        : someSelected
+                        ? 'bg-red-200 border-red-400'
+                        : 'border-red-300 hover:border-red-500'
+                    )}
+                  >
+                    {allSelected && <CheckIcon className="w-3 h-3" />}
+                    {someSelected && !allSelected && <span className="w-2 h-2 bg-red-600 rounded-sm" />}
+                  </button>
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: category.color }}
+                  />
+                  <span className="text-xs font-medium text-red-700">{category.name}</span>
+                  <span className="text-xs text-red-500">({tasks.length})</span>
+                </div>
+                <div className="divide-y divide-red-100">
+                  {tasks.map((instance) => (
+                    <TaskItem
+                      key={instance.id}
+                      instance={instance}
+                      categories={categories}
+                      onStatusChange={(status, notes) => onStatusChange(instance.id, status, notes)}
+                      isOverdue
+                      isSelected={selectedIds.has(instance.id)}
+                      onToggleSelect={() => toggleSelection(instance.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -202,21 +334,41 @@ function TaskItem({
   categories,
   onStatusChange,
   isOverdue = false,
+  isSelected = false,
+  onToggleSelect,
 }: {
   instance: TaskInstance
   categories: Category[]
   onStatusChange: (status: string, notes?: string) => void
   isOverdue?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
 }) {
   const [showNotes, setShowNotes] = useState(false)
   const [notes, setNotes] = useState(instance.notes || '')
+  const { openInstance } = useTaskPanelStore()
 
   const category = categories.find((c) => c.id === instance.task_definition?.category_id)
 
   return (
-    <div className={clsx('px-4 py-3', isOverdue && 'bg-red-50')}>
+    <div className={clsx('px-4 py-3', isOverdue && 'bg-red-50', isSelected && 'bg-red-100')}>
       <div className="flex items-center gap-3">
-        {/* Checkbox */}
+        {/* Selection checkbox (for bulk actions in overdue) */}
+        {onToggleSelect && (
+          <button
+            onClick={onToggleSelect}
+            className={clsx(
+              'w-4 h-4 rounded border-2 flex items-center justify-center transition-colors',
+              isSelected
+                ? 'bg-red-600 border-red-600 text-white'
+                : 'border-red-300 hover:border-red-500'
+            )}
+          >
+            {isSelected && <CheckIcon className="w-2 h-2" />}
+          </button>
+        )}
+
+        {/* Completion checkbox */}
         <button
           onClick={() => {
             const newStatus = instance.status === 'completed' ? 'pending' : 'completed'
@@ -234,16 +386,17 @@ function TaskItem({
           )}
         </button>
 
-        {/* Task title */}
+        {/* Task title - clickable to open panel */}
         <div className="flex-1">
-          <span
+          <button
+            onClick={() => openInstance(instance)}
             className={clsx(
-              'font-medium',
+              'font-medium text-left hover:underline',
               instance.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'
             )}
           >
             {instance.task_definition?.title}
-          </span>
+          </button>
           {isOverdue && (
             <span className="ml-2 text-sm text-red-600">
               ({format(new Date(instance.scheduled_date), 'MMM d')})

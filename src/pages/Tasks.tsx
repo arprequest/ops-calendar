@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import type { TaskDefinition, Category, RecurrenceConfig } from '../types'
+import TaskForm from '../components/tasks/TaskForm'
 
 interface TaskFormData {
   title: string
@@ -10,27 +11,11 @@ interface TaskFormData {
   recurrence_config: RecurrenceConfig
 }
 
-const RECURRENCE_TYPES = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'yearly', label: 'Yearly' },
-  { value: 'bimonthly', label: 'Bi-Monthly' },
-  { value: 'asNeeded', label: 'As Needed' },
-]
-
 export default function TasksPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<TaskDefinition | null>(null)
-  const [formData, setFormData] = useState<TaskFormData>({
-    title: '',
-    category_id: null,
-    recurrence_type: 'daily',
-    recurrence_config: { type: 'daily', weekdaysOnly: false },
-  })
 
   const queryClient = useQueryClient()
 
@@ -104,23 +89,11 @@ export default function TasksPage() {
 
   const openCreateModal = () => {
     setEditingTask(null)
-    setFormData({
-      title: '',
-      category_id: categories[0]?.id || null,
-      recurrence_type: 'daily',
-      recurrence_config: { type: 'daily', weekdaysOnly: false },
-    })
     setIsModalOpen(true)
   }
 
   const openEditModal = (task: TaskDefinition) => {
     setEditingTask(task)
-    setFormData({
-      title: task.title,
-      category_id: task.category_id,
-      recurrence_type: task.recurrence_type,
-      recurrence_config: task.recurrence_config,
-    })
     setIsModalOpen(true)
   }
 
@@ -129,42 +102,12 @@ export default function TasksPage() {
     setEditingTask(null)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleFormSubmit = (data: TaskFormData) => {
     if (editingTask) {
-      updateTaskMutation.mutate({ id: editingTask.id, data: formData })
+      updateTaskMutation.mutate({ id: editingTask.id, data })
     } else {
-      createTaskMutation.mutate(formData)
+      createTaskMutation.mutate(data)
     }
-  }
-
-  const handleRecurrenceTypeChange = (type: string) => {
-    let config: RecurrenceConfig
-    switch (type) {
-      case 'daily':
-        config = { type: 'daily', weekdaysOnly: false }
-        break
-      case 'weekly':
-        config = { type: 'weekly', dayOfWeek: 1 }
-        break
-      case 'monthly':
-        config = { type: 'monthly', dayOfMonth: 1 }
-        break
-      case 'quarterly':
-        config = { type: 'quarterly', monthOfQuarter: 1, dayOfMonth: 1 }
-        break
-      case 'yearly':
-        config = { type: 'yearly', month: 1, dayOfMonth: 1 }
-        break
-      case 'bimonthly':
-        config = { type: 'bimonthly', monthParity: 'even', dayOfMonth: 1 }
-        break
-      case 'asNeeded':
-      default:
-        config = { type: 'asNeeded' }
-        break
-    }
-    setFormData({ ...formData, recurrence_type: type, recurrence_config: config })
   }
 
   const filteredTasks = tasks.filter((task) => {
@@ -187,17 +130,34 @@ export default function TasksPage() {
     const config = task.recurrence_config
     switch (config.type) {
       case 'daily':
-        return config.weekdaysOnly ? 'Daily (Weekdays)' : 'Daily'
+        if (config.weekdaysOnly) return 'Every weekday'
+        if (config.interval && config.interval > 1) return `Every ${config.interval} days`
+        return 'Daily'
       case 'weekly':
-        return 'Weekly'
+        const days = config.daysOfWeek?.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')
+        if (config.interval && config.interval > 1) return `Every ${config.interval} weeks (${days || getDayName(config.dayOfWeek)})`
+        return `Weekly (${days || getDayName(config.dayOfWeek)})`
       case 'monthly':
-        return 'Monthly'
+        if (config.useNthWeekday) {
+          const nth = ['First', 'Second', 'Third', 'Fourth', 'Last'][config.nthWeek! - 1] || ''
+          const day = getDayName(config.nthDayOfWeek || 0)
+          return `${nth} ${day} monthly`
+        }
+        if (config.interval && config.interval > 1) return `Day ${config.dayOfMonth} every ${config.interval} months`
+        return `Monthly (day ${config.dayOfMonth})`
       case 'bimonthly':
         return `Bi-Monthly (${config.monthParity} months)`
       case 'quarterly':
         return 'Quarterly'
       case 'yearly':
-        return 'Yearly'
+        if (config.useNthWeekday) {
+          const nth = ['First', 'Second', 'Third', 'Fourth', 'Last'][config.nthWeek! - 1] || ''
+          const day = getDayName(config.nthDayOfWeek || 0)
+          const month = getMonthName(config.month)
+          return `${nth} ${day} of ${month}`
+        }
+        if (config.interval && config.interval > 1) return `Every ${config.interval} years (${getMonthName(config.month)} ${config.dayOfMonth})`
+        return `Yearly (${getMonthName(config.month)} ${config.dayOfMonth})`
       case 'nthWeekday':
         return `${ordinal(config.n)} ${getDayName(config.dayOfWeek)}`
       case 'multiMonth':
@@ -348,154 +308,27 @@ export default function TasksPage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-200">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold text-gray-900">
                 {editingTask ? 'Edit Task' : 'Add New Task'}
               </h2>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="px-6 py-4 space-y-4">
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Task Title
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="input"
-                    placeholder="Enter task title"
-                    required
-                  />
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={formData.category_id ?? ''}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value ? Number(e.target.value) : null })}
-                    className="input"
-                    required
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Recurrence Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Recurrence
-                  </label>
-                  <select
-                    value={formData.recurrence_type}
-                    onChange={(e) => handleRecurrenceTypeChange(e.target.value)}
-                    className="input"
-                  >
-                    {RECURRENCE_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Additional config based on recurrence type */}
-                {formData.recurrence_type === 'monthly' && formData.recurrence_config.type === 'monthly' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Day of Month
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={formData.recurrence_config.dayOfMonth || 1}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        recurrence_config: { type: 'monthly', dayOfMonth: parseInt(e.target.value) }
-                      })}
-                      className="input"
-                    />
-                  </div>
-                )}
-
-                {formData.recurrence_type === 'yearly' && formData.recurrence_config.type === 'yearly' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Month
-                      </label>
-                      <select
-                        value={formData.recurrence_config.month || 1}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          recurrence_config: {
-                            type: 'yearly',
-                            month: parseInt(e.target.value),
-                            dayOfMonth: formData.recurrence_config.type === 'yearly' ? formData.recurrence_config.dayOfMonth : 1
-                          }
-                        })}
-                        className="input"
-                      >
-                        {['January', 'February', 'March', 'April', 'May', 'June',
-                          'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
-                          <option key={i} value={i + 1}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Day
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={formData.recurrence_config.dayOfMonth || 1}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          recurrence_config: {
-                            type: 'yearly',
-                            month: formData.recurrence_config.type === 'yearly' ? formData.recurrence_config.month : 1,
-                            dayOfMonth: parseInt(e.target.value)
-                          }
-                        })}
-                        className="input"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createTaskMutation.isPending || updateTaskMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  {createTaskMutation.isPending || updateTaskMutation.isPending
-                    ? 'Saving...'
-                    : editingTask ? 'Update Task' : 'Create Task'}
-                </button>
-              </div>
-            </form>
+            <div className="px-6 py-4">
+              <TaskForm
+                initialData={editingTask ? {
+                  title: editingTask.title,
+                  category_id: editingTask.category_id,
+                  recurrence_type: editingTask.recurrence_type,
+                  recurrence_config: editingTask.recurrence_config,
+                } : undefined}
+                onSubmit={handleFormSubmit}
+                onCancel={closeModal}
+                isSubmitting={createTaskMutation.isPending || updateTaskMutation.isPending}
+                submitLabel={editingTask ? 'Update Task' : 'Create Task'}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -512,4 +345,10 @@ function ordinal(n: number): string {
 function getDayName(day: number): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   return days[day] || 'Unknown'
+}
+
+function getMonthName(month: number): string {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
+  return months[month - 1] || 'Unknown'
 }

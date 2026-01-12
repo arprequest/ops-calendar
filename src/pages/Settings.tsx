@@ -27,8 +27,128 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Change Password section */}
+      <ChangePassword />
+
       {/* Admin section */}
       {isAdmin && <UserManagement />}
+    </div>
+  )
+}
+
+function ChangePassword() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Failed to change password')
+      return result
+    },
+    onSuccess: () => {
+      setMessage({ type: 'success', text: 'Password changed successfully!' })
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setMessage(null), 5000)
+    },
+    onError: (error: Error) => {
+      setMessage({ type: 'error', text: error.message })
+      setTimeout(() => setMessage(null), 5000)
+    },
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setMessage(null)
+
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: 'error', text: 'New passwords do not match' })
+      return
+    }
+
+    if (newPassword.length < 4) {
+      setMessage({ type: 'error', text: 'New password must be at least 4 characters' })
+      return
+    }
+
+    changePasswordMutation.mutate({ currentPassword, newPassword })
+  }
+
+  return (
+    <div className="card p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h2>
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Current Password
+          </label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="input"
+            placeholder="Enter current password"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            New Password
+          </label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="input"
+            placeholder="Enter new password"
+            required
+            minLength={4}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Confirm New Password
+          </label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="input"
+            placeholder="Confirm new password"
+            required
+          />
+        </div>
+
+        {message && (
+          <div
+            className={clsx(
+              'p-3 rounded-lg text-sm',
+              message.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            )}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={changePasswordMutation.isPending || !currentPassword || !newPassword || !confirmPassword}
+          className="btn btn-primary"
+        >
+          {changePasswordMutation.isPending ? 'Changing...' : 'Change Password'}
+        </button>
+      </form>
     </div>
   )
 }

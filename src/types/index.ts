@@ -29,19 +29,38 @@ export type RecurrenceType =
   | 'asNeeded'
   | 'asOccurs'
 
+// Common recurrence range options
+export interface RecurrenceRange {
+  startDate?: string // ISO date string for when recurrence begins
+  endType: 'never' | 'date' | 'occurrences'
+  endDate?: string // ISO date string (if endType is 'date')
+  occurrences?: number // Number of occurrences (if endType is 'occurrences')
+}
+
 export interface DailyConfig {
   type: 'daily'
   weekdaysOnly: boolean
+  interval?: number // Every X days (default 1)
+  range?: RecurrenceRange
 }
 
 export interface WeeklyConfig {
   type: 'weekly'
-  dayOfWeek: number // 0-6, Sunday = 0
+  dayOfWeek: number // 0-6, Sunday = 0 (legacy, single day)
+  daysOfWeek?: number[] // Array of days (0-6) for multiple day selection
+  interval?: number // Every X weeks (default 1)
+  range?: RecurrenceRange
 }
 
 export interface MonthlyConfig {
   type: 'monthly'
   dayOfMonth: number // 1-31
+  interval?: number // Every X months (default 1)
+  // Alternative: nth weekday of month
+  useNthWeekday?: boolean
+  nthWeek?: number // 1-4 for first-fourth, 5 for last
+  nthDayOfWeek?: number // 0-6
+  range?: RecurrenceRange
 }
 
 export interface BimonthlyConfig {
@@ -60,6 +79,12 @@ export interface YearlyConfig {
   type: 'yearly'
   month: number // 1-12
   dayOfMonth: number
+  interval?: number // Every X years (default 1)
+  // Alternative: nth weekday of month
+  useNthWeekday?: boolean
+  nthWeek?: number // 1-4 for first-fourth, 5 for last
+  nthDayOfWeek?: number // 0-6
+  range?: RecurrenceRange
 }
 
 export interface NthWeekdayConfig {
