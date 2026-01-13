@@ -213,23 +213,32 @@ export default function TaskDetailPanel() {
         onClick={close}
       />
 
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
+      {/* Panel - full screen on mobile, slide-in on desktop */}
+      <div className="fixed inset-0 md:inset-auto md:right-0 md:top-0 md:h-full md:w-full md:max-w-md bg-white shadow-xl z-50 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {isEditing ? 'Edit Task' : 'Task Details'}
-          </h2>
+        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-gray-200">
+          {/* Back button on mobile */}
           <button
             onClick={close}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="md:hidden p-2 -ml-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+            aria-label="Go back"
+          >
+            <BackIcon className="w-5 h-5" />
+          </button>
+          <h2 className="text-lg font-semibold text-gray-900 flex-1 md:flex-none">
+            {isEditing ? 'Edit Task' : 'Task Details'}
+          </h2>
+          {/* Close button on desktop only */}
+          <button
+            onClick={close}
+            className="hidden md:block p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <CloseIcon className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {isEditing ? (
             // Edit form
             <div className="space-y-4">
@@ -397,11 +406,11 @@ export default function TaskDetailPanel() {
                     <label className="block text-sm font-medium text-gray-500 mb-1">
                       Status
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => handleStatusChange('pending')}
                         className={clsx(
-                          'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                          'flex-1 md:flex-none px-3 py-2.5 md:py-1.5 text-sm rounded-lg border transition-colors',
                           selectedInstance.status === 'pending'
                             ? 'bg-yellow-100 border-yellow-300 text-yellow-700'
                             : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -412,7 +421,7 @@ export default function TaskDetailPanel() {
                       <button
                         onClick={() => handleStatusChange('completed')}
                         className={clsx(
-                          'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                          'flex-1 md:flex-none px-3 py-2.5 md:py-1.5 text-sm rounded-lg border transition-colors',
                           selectedInstance.status === 'completed'
                             ? 'bg-green-100 border-green-300 text-green-700'
                             : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -423,7 +432,7 @@ export default function TaskDetailPanel() {
                       <button
                         onClick={() => handleStatusChange('skipped')}
                         className={clsx(
-                          'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                          'flex-1 md:flex-none px-3 py-2.5 md:py-1.5 text-sm rounded-lg border transition-colors',
                           selectedInstance.status === 'skipped'
                             ? 'bg-gray-200 border-gray-400 text-gray-700'
                             : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -471,7 +480,7 @@ export default function TaskDetailPanel() {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+        <div className="px-4 md:px-6 py-4 border-t border-gray-200 flex flex-col-reverse md:flex-row justify-between gap-3 md:gap-0">
           <button
             onClick={handleDelete}
             className="text-red-600 hover:text-red-700 text-sm font-medium"
@@ -514,6 +523,14 @@ function CloseIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+
+function BackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
     </svg>
   )
 }

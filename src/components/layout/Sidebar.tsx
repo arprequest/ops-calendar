@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { useCalendarStore } from '../../stores/calendarStore'
+import { useUIStore } from '../../stores/uiStore'
 import type { Category } from '../../types'
 
 const navItems = [
@@ -12,6 +13,7 @@ const navItems = [
 
 export default function Sidebar() {
   const { selectedCategories, toggleCategory, setSelectedCategories } = useCalendarStore()
+  const { closeMobileMenu } = useUIStore()
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['categories'],
@@ -25,8 +27,12 @@ export default function Sidebar() {
 
   const allSelected = selectedCategories.length === 0 || selectedCategories.length === categories.length
 
+  const handleNavClick = () => {
+    closeMobileMenu()
+  }
+
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Logo */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
@@ -46,6 +52,7 @@ export default function Sidebar() {
             key={to}
             to={to}
             end={to === '/'}
+            onClick={handleNavClick}
             className={({ isActive }) =>
               clsx(
                 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
@@ -106,6 +113,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-gray-200">
         <NavLink
           to="/settings"
+          onClick={handleNavClick}
           className={({ isActive }) =>
             clsx(
               'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
